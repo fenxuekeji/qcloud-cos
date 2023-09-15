@@ -25,6 +25,10 @@ module QcloudCos
       request(Net::HTTP::Delete, url, nil, headers)
     end
 
+    def head(url, headers = {})
+      request(Net::HTTP::Head, url, nil, headers)
+    end
+
     def get(url, headers = {})
       request(Net::HTTP::Get, url, nil, headers)
     end
@@ -38,26 +42,30 @@ module QcloudCos
         request.body = body
         http.request(request)
       end
-
-      raise QcloudCos::Http::ResponseCodeError, response if response.code.to_i != 200
+      raise QcloudCos::Http::ResponseCodeError, response if response.code.to_i >= 200 and response.code.to_i < 300
 
       response
     end
 
+    def object_url_with_auth(obj_url, headers={})
+      uri = URI.parse(obj_url)
+      auth_str = compute_auth('GET', uri.request_uri, headers)
+      uri.query = auth_str
+      uri.to_s
+    end
+
     def compute_auth(method, fullpath, headers = {})
       path, query_string = fullpath.split("?")
-
+      query_string = query_string.gsub('restore','') if query_string
       q_sign_time = "#{Time.now.to_i};#{Time.now.to_i + 600}"
       q_header_list = headers.keys.map(&:downcase).sort.join(";")
       q_url_params = query_string.to_s.split("&").map { |s| s.split("=").first }.compact.map(&:downcase).sort.join(";")
-
       sign_key = OpenSSL::HMAC.hexdigest("SHA1", access_key, q_sign_time)
-      http_parameters = query_string.to_s.split("&").map { |s| s.split("=") }.map { |field, value| [field.downcase, value] }.sort_by { |field, _| field.to_s }.map { |field, value| [field, value].compact.join("=") }.join("&")
-      http_headers = headers.map { |h, v| [h.downcase, CGI.escape(v)].join("=") }.join("&")
+      http_parameters = query_string.to_s.split("&").map { |s| s.split("=") }.map { |field, value| [field.downcase, value]}.sort_by { |field, value| field}.map { |field, value| [field, value].compact.join("=") }.join("&")
+      http_headers = headers.map { |h, v| [h.downcase, CGI.escape(v)]}.sort_by { |field, value| field}.map { |field, value| [field, value].compact.join("=") }.join("&")
       http_string = "#{method.downcase}\n#{path}\n#{http_parameters}\n#{http_headers}\n"
       string_to_sign = "sha1\n#{q_sign_time}\n#{Digest::SHA1.hexdigest(http_string)}\n"
       signature = OpenSSL::HMAC.hexdigest("SHA1", sign_key, string_to_sign)
-
       "q-sign-algorithm=sha1&q-ak=#{access_id}&q-sign-time=#{q_sign_time}&q-key-time=#{q_sign_time}&q-header-list=#{q_header_list}&q-url-param-list=#{q_url_params}&q-signature=#{signature}"
     end
 
