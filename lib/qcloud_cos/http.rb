@@ -42,7 +42,7 @@ module QcloudCos
         request.body = body
         http.request(request)
       end
-      raise QcloudCos::Http::ResponseCodeError, response if response.code.to_i >= 200 and response.code.to_i < 300
+      # raise QcloudCos::Http::ResponseCodeError, response if response.code.to_i >= 200 and response.code.to_i < 300
 
       response
     end

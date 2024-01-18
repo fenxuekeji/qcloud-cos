@@ -55,7 +55,41 @@ module QcloudCos
         'Host': compute_host,
       }
       response = http.post(compute_url(path+"?restore"), data, headers)
-      #ActiveSupport::HashWithIndifferentAccess.new(ActiveSupport::XmlMini.parse(body))
+      case response.code
+      when '202'
+        res_hash = response.to_hash
+        return {
+          status: 'success',
+          cos_request_id: res_hash["x-cos-request-id"],
+        }
+      when '200'
+        res_hash = response.to_hash
+        return {
+          status: 'success',
+          cos_request_id: res_hash["x-cos-request-id"],
+        }
+      when '409'
+        body_hash = ActiveSupport::HashWithIndifferentAccess.new(ActiveSupport::XmlMini.parse(response.body))
+        return {
+          status: 'success',
+          cos_code: body_hash['Error']['Code']["__content__"],
+          cos_request_id: body_hash['Error']['RequestId']["__content__"],
+        }
+      when '404'
+        body_hash = ActiveSupport::HashWithIndifferentAccess.new(ActiveSupport::XmlMini.parse(response.body))
+
+        return {
+          status: 'fail',
+          cos_code: body_hash['Error']['Code']["__content__"],
+          cos_request_id: body_hash['Error']['RequestId']["__content__"],
+        }
+      else
+        return {
+          status: 'unknown',
+          http_code: response.code,
+          cos_msg: response.as_json,
+        }
+      end
     end
 
     def delete_object(path)
